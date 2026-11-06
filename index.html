@@ -58,16 +58,68 @@
     <!-- 主內容區 -->
     <main class="flex-1 px-4 py-3 space-y-4">
 
-      <!-- 未設定 GAS URL 提示橫幅 -->
-      <div v-if="!gasUrl" class="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center space-y-2.5">
-        <div class="text-3xl">👋</div>
-        <h3 class="font-bold text-slate-800 text-sm">歡迎使用！請先綁定 Google 試算表</h3>
-        <p class="text-xs text-slate-500 leading-relaxed">
-          系統直接讀寫您自己的 Google 試算表，請填入您部署的 GAS Web App 網址。
-        </p>
-        <button @click="showSettingsModal = true" class="inline-flex items-center px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-medium text-xs rounded-xl shadow-sm transition">
-          立即設定後端網址
-        </button>
+      <!-- 未設定 GAS URL：新手 3 步驟開通引導 -->
+      <div v-if="!gasUrl" class="bg-white border border-slate-200/80 rounded-3xl p-5 shadow-sm space-y-4">
+        <div class="text-center space-y-1">
+          <div class="inline-flex items-center justify-center w-12 h-12 bg-amber-100 rounded-2xl text-2xl mb-1">
+            📦
+          </div>
+          <h2 class="font-bold text-slate-900 text-base">歡迎使用「柴米油鹽」居家倉儲</h2>
+          <p class="text-xs text-slate-500 leading-relaxed max-w-xs mx-auto">
+            100% 零維護費、高隱私自託管！物資資料將完全儲存在您自己的 Google 試算表中，只需 1 分鐘即可建立完畢。
+          </p>
+        </div>
+
+        <div class="space-y-3 pt-1">
+          <!-- 步驟 1 -->
+          <div class="bg-amber-50/70 border border-amber-200/70 rounded-2xl p-3.5 space-y-2">
+            <div class="flex items-center space-x-2">
+              <span class="w-5 h-5 rounded-full bg-amber-500 text-white font-bold text-[11px] flex items-center justify-center shrink-0">1</span>
+              <span class="text-xs font-bold text-slate-800">建立專屬試算表 (含範本與程式)</span>
+            </div>
+            <p class="text-[11px] text-slate-500 leading-relaxed pl-7">
+              點擊下方按鈕，Google 會詢問是否建立副本，點選「建立副本」即可將庫存表複製到您的個人雲端硬碟。
+            </p>
+            <div class="pl-7">
+              <a :href="templateCopyUrl" target="_blank" 
+                 class="inline-flex items-center space-x-1.5 px-3.5 py-2 bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold text-xs rounded-xl shadow-sm transition">
+                <span>📋 一鍵建立我的試算表副本</span>
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+              </a>
+            </div>
+          </div>
+
+          <!-- 步驟 2 -->
+          <div class="bg-slate-50 border border-slate-200/70 rounded-2xl p-3.5 space-y-2">
+            <div class="flex items-center space-x-2">
+              <span class="w-5 h-5 rounded-full bg-slate-700 text-white font-bold text-[11px] flex items-center justify-center shrink-0">2</span>
+              <span class="text-xs font-bold text-slate-800">在試算表部署 Web App 取得網址</span>
+            </div>
+            <div class="text-[11px] text-slate-500 space-y-1.5 pl-7 leading-relaxed">
+              <p>在剛建立的 Google 試算表中操作：</p>
+              <p>① 點上方選單 <b>「擴充功能」 > 「Apps Script」</b></p>
+              <p>② 點右上角藍色 <b>「部署」 > 「新部署」</b></p>
+              <p>③ 齒輪選「網頁應用程式」，存取權限務必選 <b>「所有人 (Anyone)」</b></p>
+              <p>④ 點擊部署並複製生成的 <b>Web App 網址</b>（結尾為 /exec）</p>
+            </div>
+          </div>
+
+          <!-- 步驟 3 -->
+          <div class="bg-slate-50 border border-slate-200/70 rounded-2xl p-3.5 space-y-2.5">
+            <div class="flex items-center space-x-2">
+              <span class="w-5 h-5 rounded-full bg-slate-700 text-white font-bold text-[11px] flex items-center justify-center shrink-0">3</span>
+              <span class="text-xs font-bold text-slate-800">貼上網址並開始使用</span>
+            </div>
+            <div class="pl-7 space-y-2">
+              <input v-model="tempGasUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec"
+                     class="w-full bg-white border border-slate-300 rounded-xl p-2.5 outline-none focus:border-amber-400 text-xs font-mono">
+              <button @click="saveGasUrl" :disabled="!tempGasUrl.trim()"
+                      class="w-full bg-slate-900 active:bg-black text-white font-bold py-2.5 rounded-xl text-xs shadow-sm disabled:opacity-50 transition">
+                儲存並開始使用
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
       <!-- ⚠️ 補貨雷達 (動態高掛警示專區) -->
@@ -499,8 +551,8 @@
 
     createApp({
       setup() {
-        const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbxCd5YJ6n7lrpeGtAe8Z8RQfa_HzymYyYKhsJPzkyZRMgbBXZOoq7mJNA76inZP9tlaGA/exec';
-        const gasUrl = ref(localStorage.getItem('HOME_PANTRY_GAS_URL') || DEFAULT_GAS_URL);
+        const templateCopyUrl = 'https://docs.google.com/spreadsheets/d/1uNG4gPJ1kLqKVqrdEtoSPCehokIAPKQqxWrvl0GLBDY/copy';
+        const gasUrl = ref(localStorage.getItem('HOME_PANTRY_GAS_URL') || '');
         const tempGasUrl = ref(gasUrl.value);
         const inventory = ref([]);
         const logs = ref([]);
@@ -756,8 +808,21 @@
           return await res.json();
         }
 
-        // 初始化 LIFF (若有的話)
+        // 初始化與網址參數自動綁定
         onMounted(() => {
+          // 支援 ?gas=... 快捷魔術連結綁定
+          try {
+            const urlParams = new URLSearchParams(window.location.search);
+            const gasParam = urlParams.get('gas');
+            if (gasParam && gasParam.startsWith('http')) {
+              localStorage.setItem('HOME_PANTRY_GAS_URL', gasParam);
+              gasUrl.value = gasParam;
+              tempGasUrl.value = gasParam;
+              window.history.replaceState({}, document.title, window.location.pathname);
+              showToast('✅ 成功綁定個人庫存表！');
+            }
+          } catch (e) {}
+
           if (window.liff) {
             liff.init({ liffId: "" }).catch(() => {
               // 獨立瀏覽器開啟時忽略 LIFF 初始化失敗
@@ -769,7 +834,7 @@
         });
 
         return {
-          gasUrl, tempGasUrl, inventory, logs, loading, submitting,
+          gasUrl, tempGasUrl, templateCopyUrl, inventory, logs, loading, submitting,
           showSettingsModal, showRestockModal, showAddModal, showEditModal, showLogsModal,
           searchQuery, selectedCategory, categories, availableCategories, storeQuickList,
           activeItem, restockForm, itemForm, editForm, toast,
