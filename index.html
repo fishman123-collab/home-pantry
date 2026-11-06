@@ -33,6 +33,12 @@
       </div>
       
       <div class="flex items-center space-x-1.5">
+        <!-- 目前操作者身分 -->
+        <div @click="showSettingsModal = true" class="flex items-center space-x-1.5 bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 px-2.5 py-1 rounded-full text-[11px] font-medium cursor-pointer transition shrink-0" title="點擊切換稱呼">
+          <img v-if="currentUser.pictureUrl" :src="currentUser.pictureUrl" class="w-4 h-4 rounded-full">
+          <span v-else class="text-xs">👤</span>
+          <span class="max-w-[65px] truncate font-bold text-slate-800">{{ currentUser.name }}</span>
+        </div>
         <!-- 重新整理按鈕 -->
         <button @click="fetchData(true)" :disabled="loading" class="p-2 text-slate-500 hover:text-slate-800 active:bg-slate-100 rounded-full transition" title="重新整理">
           <svg :class="{'animate-spin': loading}" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -68,6 +74,14 @@
           <p class="text-xs text-slate-500 leading-relaxed max-w-xs mx-auto">
             100% 零維護費、高隱私自託管！物資資料將完全儲存在您自己的 Google 試算表中，只需 1 分鐘即可建立完畢。
           </p>
+        </div>
+
+        <!-- 電腦操作提醒 -->
+        <div class="bg-blue-50 border border-blue-200/80 text-blue-900 rounded-2xl p-3 text-[11px] leading-relaxed flex items-start space-x-2">
+          <span class="text-base shrink-0">💻</span>
+          <div>
+            <b>貼心提醒</b>：初次開通請在<b>「電腦瀏覽器」</b>操作（手機 Google 試算表 App 限制無法部署 Apps Script 腳本）。在電腦完成後，將生成的網址傳給自己手機綁定一次，往後就永遠在手機 LINE 上滑順使用！
+          </div>
         </div>
 
         <div class="space-y-3 pt-1">
@@ -490,7 +504,7 @@
               </span>
             </div>
             <div class="flex items-center justify-between text-[11px] text-slate-400">
-              <span>{{ formatDateTime(log.timestamp) }}</span>
+              <span>{{ formatDateTime(log.timestamp) }} <span v-if="log.operator" class="text-slate-600 font-semibold ml-1 bg-slate-150 px-1 py-0.5 rounded text-[10px]">👤 {{ log.operator }}</span></span>
               <span>結存: {{ log.balance_qty }}</span>
             </div>
             <div v-if="log.unit_price || log.store || log.note" class="text-[11px] text-slate-500 pt-0.5 border-t border-slate-100/80">
@@ -510,13 +524,29 @@
     <div v-if="showSettingsModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
       <div class="bg-white w-full max-w-sm rounded-2xl p-5 space-y-4 shadow-2xl">
         <div class="flex items-center justify-between pb-2 border-b border-slate-100">
-          <h3 class="text-sm font-bold text-slate-900">後端連線設定</h3>
+          <h3 class="text-sm font-bold text-slate-900">個人與後端設定</h3>
           <button @click="showSettingsModal = false" class="text-slate-400 hover:text-slate-600 p-1">
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
           </button>
         </div>
 
-        <div class="space-y-3 text-xs">
+        <div class="space-y-3.5 text-xs">
+          <!-- 暱稱設定 -->
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">我的稱呼 / 暱稱 (操作人)</label>
+            <div class="flex items-center space-x-2">
+              <input v-model="tempUserName" type="text" placeholder="例: 爸爸, 媽媽, 大廚"
+                     class="flex-1 bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none focus:border-amber-400 text-xs">
+              <span v-if="currentUser.pictureUrl" class="shrink-0">
+                <img :src="currentUser.pictureUrl" class="w-8 h-8 rounded-full border border-slate-200">
+              </span>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1 leading-relaxed">
+              共同維護時，開封與補貨日誌會標記此名稱（使用 LINE 開啟會自動帶入 LINE 暱稱）。
+            </p>
+          </div>
+
+          <!-- GAS 網址 -->
           <div>
             <label class="block font-bold text-slate-700 mb-1">Google Apps Script (GAS) 網址</label>
             <input v-model="tempGasUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec"
@@ -554,6 +584,12 @@
         const templateCopyUrl = 'https://docs.google.com/spreadsheets/d/1uNG4gPJ1kLqKVqrdEtoSPCehokIAPKQqxWrvl0GLBDY/copy';
         const gasUrl = ref(localStorage.getItem('HOME_PANTRY_GAS_URL') || '');
         const tempGasUrl = ref(gasUrl.value);
+        const currentUser = ref({
+          name: localStorage.getItem('HOME_PANTRY_USER_NAME') || '家人',
+          pictureUrl: '',
+          userId: ''
+        });
+        const tempUserName = ref(currentUser.value.name);
         const inventory = ref([]);
         const logs = ref([]);
         const loading = ref(false);
@@ -637,12 +673,17 @@
           }
         }
 
-        // 保存 GAS 網址
+        // 保存設定 (GAS 網址與稱呼)
         function saveGasUrl() {
           let url = tempGasUrl.value.trim();
-          if (!url) return;
-          localStorage.setItem('HOME_PANTRY_GAS_URL', url);
-          gasUrl.value = url;
+          if (url) {
+            localStorage.setItem('HOME_PANTRY_GAS_URL', url);
+            gasUrl.value = url;
+          }
+          const name = tempUserName.value.trim() || '家人';
+          currentUser.value.name = name;
+          localStorage.setItem('HOME_PANTRY_USER_NAME', name);
+
           showSettingsModal.value = false;
           fetchData(true);
         }
@@ -796,9 +837,9 @@
           }
         }
 
-        // 底層發送 POST (使用 text/plain 避免 CORS preflight 錯誤)
+        // 底層發送 POST (自動帶上操作人姓名，使用 text/plain 避免 CORS preflight 錯誤)
         async function sendPost(action, payload) {
-          const body = JSON.stringify({ action: action, ...payload });
+          const body = JSON.stringify({ action: action, operator: currentUser.value.name, ...payload });
           const res = await fetch(gasUrl.value, {
             method: 'POST',
             redirect: 'follow',
@@ -823,8 +864,21 @@
             }
           } catch (e) {}
 
+          // LINE LIFF 身分讀取
           if (window.liff) {
-            liff.init({ liffId: "" }).catch(() => {
+            liff.init({ liffId: "" }).then(() => {
+              if (liff.isLoggedIn()) {
+                liff.getProfile().then(profile => {
+                  if (profile.displayName) {
+                    currentUser.value.name = profile.displayName;
+                    currentUser.value.pictureUrl = profile.pictureUrl || '';
+                    currentUser.value.userId = profile.userId || '';
+                    tempUserName.value = profile.displayName;
+                    localStorage.setItem('HOME_PANTRY_USER_NAME', profile.displayName);
+                  }
+                }).catch(() => {});
+              }
+            }).catch(() => {
               // 獨立瀏覽器開啟時忽略 LIFF 初始化失敗
             });
           }
@@ -834,7 +888,8 @@
         });
 
         return {
-          gasUrl, tempGasUrl, templateCopyUrl, inventory, logs, loading, submitting,
+          gasUrl, tempGasUrl, templateCopyUrl, currentUser, tempUserName,
+          inventory, logs, loading, submitting,
           showSettingsModal, showRestockModal, showAddModal, showEditModal, showLogsModal,
           searchQuery, selectedCategory, categories, availableCategories, storeQuickList,
           activeItem, restockForm, itemForm, editForm, toast,
