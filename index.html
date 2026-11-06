@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>柴米油鹽醬醋茶 - 居家物資倉儲管理</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Vue 3 CDN -->
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <!-- LINE LIFF SDK -->
+  <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+  <style>
+    /* 隱藏滾動條但保持滾動 */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    [v-cloak] { display: none; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 antialiased min-h-screen pb-24 select-none">
+  <div id="app" v-cloak class="max-w-md mx-auto min-h-screen flex flex-col bg-white shadow-xl relative">
+
+    <!-- 頂部導航列 -->
+    <header class="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-100 px-4 py-3.5 flex items-center justify-between">
+      <div class="flex items-center space-x-2">
+        <div class="w-8 h-8 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold text-lg shadow-sm">
+          柴
+        </div>
+        <div>
+          <h1 class="text-base font-bold text-slate-900 leading-tight">柴米油鹽醬醋茶</h1>
+          <p class="text-[11px] text-slate-400">居家物資庫存雷達</p>
+        </div>
+      </div>
+      
+      <div class="flex items-center space-x-1.5">
+        <!-- 重新整理按鈕 -->
+        <button @click="fetchData(true)" :disabled="loading" class="p-2 text-slate-500 hover:text-slate-800 active:bg-slate-100 rounded-full transition" title="重新整理">
+          <svg :class="{'animate-spin': loading}" class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+          </svg>
+        </button>
+        <!-- 歷史日誌按鈕 -->
+        <button @click="showLogsModal = true" class="p-2 text-slate-500 hover:text-slate-800 active:bg-slate-100 rounded-full transition" title="異動歷史">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+          </svg>
+        </button>
+        <!-- 設定按鈕 -->
+        <button @click="showSettingsModal = true" class="p-2 text-slate-500 hover:text-slate-800 active:bg-slate-100 rounded-full transition" title="設定">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- 主內容區 -->
+    <main class="flex-1 px-4 py-3 space-y-4">
+
+      <!-- 未設定 GAS URL 提示橫幅 -->
+      <div v-if="!gasUrl" class="bg-amber-50 border border-amber-200 rounded-2xl p-4 text-center space-y-2.5">
+        <div class="text-3xl">👋</div>
+        <h3 class="font-bold text-slate-800 text-sm">歡迎使用！請先綁定 Google 試算表</h3>
+        <p class="text-xs text-slate-500 leading-relaxed">
+          系統直接讀寫您自己的 Google 試算表，請填入您部署的 GAS Web App 網址。
+        </p>
+        <button @click="showSettingsModal = true" class="inline-flex items-center px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white font-medium text-xs rounded-xl shadow-sm transition">
+          立即設定後端網址
+        </button>
+      </div>
+
+      <!-- ⚠️ 補貨雷達 (動態高掛警示專區) -->
+      <section v-if="gasUrl" class="space-y-2">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-1.5">
+            <span class="flex h-2 w-2 relative">
+              <span v-if="lowStockItems.length > 0" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+              <span class="relative inline-flex rounded-full h-2 w-2" :class="lowStockItems.length > 0 ? 'bg-rose-500' : 'bg-emerald-500'"></span>
+            </span>
+            <h2 class="text-xs font-bold uppercase tracking-wider text-slate-500">
+              補貨雷達 ({{ lowStockItems.length }})
+            </h2>
+          </div>
+          <span v-if="lowStockItems.length === 0" class="text-[11px] text-emerald-600 font-medium bg-emerald-50 px-2 py-0.5 rounded-full">
+            庫存充足無匱乏
+          </span>
+        </div>
+
+        <!-- 警示卡片列表 -->
+        <div v-if="lowStockItems.length > 0" class="space-y-2">
+          <div v-for="item in lowStockItems" :key="item.item_id" 
+               class="bg-gradient-to-r from-rose-50/80 to-amber-50/50 border border-rose-200/80 rounded-2xl p-3.5 flex items-center justify-between shadow-sm">
+            <div class="space-y-0.5 flex-1 min-w-0 pr-3">
+              <div class="flex items-center space-x-1.5">
+                <span class="text-xs font-bold text-rose-700 truncate">{{ item.name }}</span>
+                <span class="text-[10px] bg-rose-100 text-rose-700 px-1.5 py-0.2 rounded-md font-medium shrink-0">缺貨中</span>
+              </div>
+              <p class="text-xs text-slate-500">
+                目前剩餘 <span class="font-bold text-rose-600 text-sm">{{ item.current_qty }}</span> {{ item.unit }}
+                <span class="text-slate-400 text-[11px]">(警戒線: {{ item.min_qty }})</span>
+              </p>
+              <p v-if="item.last_price" class="text-[11px] text-slate-400">
+                上次價: ${{ item.last_price }} <span v-if="item.last_store">({{ item.last_store }})</span>
+              </p>
+            </div>
+            <button @click="openRestockModal(item)" class="bg-rose-600 active:bg-rose-700 text-white text-xs font-bold px-3 py-2 rounded-xl shadow-sm shrink-0 flex items-center space-x-1 transition">
+              <span>+1 補貨</span>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 搜尋與分類標籤 -->
+      <section v-if="gasUrl" class="space-y-2.5 pt-1">
+        <!-- 搜尋列 -->
+        <div class="relative">
+          <input v-model="searchQuery" type="text" placeholder="搜尋品項名稱、別名 (如: 醬油, 沙拉油)..."
+                 class="w-full bg-slate-100/90 text-xs text-slate-800 placeholder-slate-400 pl-9 pr-8 py-2.5 rounded-xl border border-transparent focus:border-amber-400 focus:bg-white outline-none transition">
+          <div class="absolute left-3 top-2.5 text-slate-400">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+            </svg>
+          </div>
+          <button v-if="searchQuery" @click="searchQuery = ''" class="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 p-0.5">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+            </svg>
+          </button>
+        </div>
+
+        <!-- 分類膠囊 -->
+        <div class="flex items-center space-x-1.5 overflow-x-auto no-scrollbar py-1">
+          <button v-for="cat in categories" :key="cat"
+                  @click="selectedCategory = cat"
+                  :class="selectedCategory === cat ? 'bg-slate-900 text-white font-bold shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200 font-medium'"
+                  class="text-xs px-3 py-1.5 rounded-xl whitespace-nowrap transition">
+            {{ cat }}
+          </button>
+        </div>
+      </section>
+
+      <!-- 庫存清單列表 -->
+      <section v-if="gasUrl" class="space-y-2.5">
+        <div class="flex items-center justify-between text-xs text-slate-400 px-1">
+          <span>庫存品項 ({{ filteredInventory.length }})</span>
+          <span>按數量狀態排序</span>
+        </div>
+
+        <!-- 骨架載入中 -->
+        <div v-if="loading && inventory.length === 0" class="space-y-3">
+          <div v-for="n in 3" :key="n" class="bg-white border border-slate-100 rounded-2xl p-4 animate-pulse space-y-3">
+            <div class="h-4 bg-slate-200 rounded w-1/3"></div>
+            <div class="h-3 bg-slate-100 rounded w-1/2"></div>
+            <div class="h-8 bg-slate-100 rounded w-full"></div>
+          </div>
+        </div>
+
+        <!-- 品項卡片 -->
+        <div v-else class="space-y-2.5">
+          <div v-for="item in filteredInventory" :key="item.item_id"
+               class="bg-white border border-slate-200/70 rounded-2xl p-4 shadow-sm hover:shadow transition relative flex flex-col justify-between space-y-3">
+            
+            <!-- 上半部：品項基本資訊 -->
+            <div class="flex items-start justify-between">
+              <div class="space-y-1 flex-1 min-w-0 pr-2">
+                <div class="flex items-center space-x-1.5">
+                  <span class="text-[10px] px-1.5 py-0.5 rounded-md font-medium text-slate-600 bg-slate-100">
+                    {{ item.category || '未分類' }}
+                  </span>
+                  <h3 class="text-sm font-bold text-slate-900 truncate">{{ item.name }}</h3>
+                </div>
+                <!-- 別名標註 -->
+                <p v-if="item.aliases" class="text-[11px] text-slate-400 truncate">
+                  別名: {{ item.aliases }}
+                </p>
+                <!-- 比價與履歷 -->
+                <div class="flex flex-wrap items-center gap-x-2 text-[11px] text-slate-500 pt-0.5">
+                  <span v-if="item.last_price">上次: <b class="text-slate-700">${{ item.last_price }}</b><span v-if="item.last_store">({{ item.last_store }})</span></span>
+                  <span v-if="item.lowest_price" class="text-emerald-600">低價: <b>${{ item.lowest_price }}</b></span>
+                  <span v-if="item.last_date" class="text-slate-400">📅 {{ formatDate(item.last_date) }}</span>
+                </div>
+              </div>
+
+              <!-- 當前庫存大字數值 -->
+              <div class="text-right shrink-0">
+                <div class="text-2xl font-black tracking-tight" :class="Number(item.current_qty) <= Number(item.min_qty) ? 'text-rose-600' : 'text-slate-800'">
+                  {{ item.current_qty }}
+                  <span class="text-xs font-normal text-slate-400">{{ item.unit }}</span>
+                </div>
+                <div class="text-[10px] font-medium" :class="Number(item.current_qty) <= Number(item.min_qty) ? 'text-rose-500' : 'text-slate-400'">
+                  警戒量: {{ item.min_qty }}
+                </div>
+              </div>
+            </div>
+
+            <!-- 下半部：快捷操作列 -->
+            <div class="flex items-center space-x-2 pt-1 border-t border-slate-50">
+              <!-- -1 消耗按鈕 (樂觀更新) -->
+              <button @click="quickConsume(item)" 
+                      :disabled="item.current_qty <= 0"
+                      :class="item.current_qty <= 0 ? 'opacity-40 cursor-not-allowed bg-slate-100 text-slate-400' : 'bg-slate-100 active:bg-slate-200 text-slate-700'"
+                      class="flex-1 py-2 rounded-xl text-xs font-bold transition flex items-center justify-center space-x-1">
+                <span>−1 開封使用</span>
+              </button>
+
+              <!-- + 補貨按鈕 (開彈窗) -->
+              <button @click="openRestockModal(item)" 
+                      class="flex-1 py-2 bg-amber-500 active:bg-amber-600 text-white rounded-xl text-xs font-bold shadow-sm transition flex items-center justify-center space-x-1">
+                <span>+ 補貨入庫</span>
+              </button>
+
+              <!-- 編輯/更多選單 -->
+              <button @click="openEditModal(item)" class="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-50 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- 無資料狀態 -->
+          <div v-if="filteredInventory.length === 0" class="text-center py-12 text-slate-400 space-y-2">
+            <div class="text-3xl">🔍</div>
+            <p class="text-xs">找不到符合條件的物資</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- 底部懸浮新增按鈕 -->
+    <div v-if="gasUrl" class="fixed bottom-6 right-6 max-w-md mx-auto z-20">
+      <button @click="openAddModal" class="bg-slate-900 active:scale-95 text-white font-bold px-4 py-3 rounded-2xl shadow-xl flex items-center space-x-2 transition">
+        <svg class="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+        </svg>
+        <span class="text-xs">新增物資品項</span>
+      </button>
+    </div>
+
+    <!-- ================= 彈出視窗組件 ================= -->
+
+    <!-- 1. 補貨彈窗 (Restock Modal) -->
+    <div v-if="showRestockModal" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm">
+      <div class="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+          <div>
+            <h3 class="text-base font-bold text-slate-900">補貨入庫</h3>
+            <p class="text-xs text-slate-400">{{ activeItem?.name }}</p>
+          </div>
+          <button @click="showRestockModal = false" class="text-slate-400 hover:text-slate-600 p-1">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          </button>
+        </div>
+
+        <div class="space-y-3 text-xs">
+          <!-- 數量調整 -->
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">入庫數量 ({{ activeItem?.unit }})</label>
+            <div class="flex items-center space-x-2">
+              <button @click="restockForm.qty = Math.max(1, restockForm.qty - 1)" class="w-10 h-10 rounded-xl bg-slate-100 font-bold text-base active:bg-slate-200">-</button>
+              <input v-model.number="restockForm.qty" type="number" min="1" class="flex-1 text-center font-bold text-base bg-slate-50 border border-slate-200 rounded-xl py-2 outline-none">
+              <button @click="restockForm.qty = restockForm.qty + 1" class="w-10 h-10 rounded-xl bg-slate-100 font-bold text-base active:bg-slate-200">+</button>
+            </div>
+          </div>
+
+          <!-- 購買單價與比價提醒 -->
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="font-bold text-slate-700">購買單價 (元)</label>
+              <span class="text-[11px] text-slate-400">上次: ${{ activeItem?.last_price || '無' }} | 最低: ${{ activeItem?.lowest_price || '無' }}</span>
+            </div>
+            <input v-model.number="restockForm.price" type="number" placeholder="選填，輸入本次採購單價" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none focus:border-amber-400 text-xs">
+          </div>
+
+          <!-- 購買通路 -->
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">購買通路</label>
+            <div class="flex flex-wrap gap-1.5 mb-2">
+              <button v-for="s in storeQuickList" :key="s" @click="restockForm.store = s" 
+                      :class="restockForm.store === s ? 'bg-amber-500 text-white' : 'bg-slate-100 text-slate-600'" 
+                      class="px-2.5 py-1 rounded-lg text-[11px] transition">
+                {{ s }}
+              </button>
+            </div>
+            <input v-model="restockForm.store" type="text" placeholder="或自行輸入通路名稱..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none focus:border-amber-400 text-xs">
+          </div>
+
+          <!-- 備註 -->
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">備註</label>
+            <input v-model="restockForm.note" type="text" placeholder="如: 特價買一送一、換新包裝..." class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none focus:border-amber-400 text-xs">
+          </div>
+        </div>
+
+        <div class="pt-2">
+          <button @click="submitRestock" :disabled="submitting" class="w-full bg-slate-900 active:bg-black text-white font-bold py-3 rounded-xl shadow-sm text-xs flex items-center justify-center space-x-1 transition">
+            <span v-if="submitting">記錄中...</span>
+            <span v-else>確認補貨入庫</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. 新增品項彈窗 (Add Item Modal) -->
+    <div v-if="showAddModal" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm">
+      <div class="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+          <h3 class="text-base font-bold text-slate-900">新增物資品項</h3>
+          <button @click="showAddModal = false" class="text-slate-400 hover:text-slate-600 p-1">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          </button>
+        </div>
+
+        <div class="space-y-3 text-xs">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">品項名稱 *</label>
+            <input v-model="itemForm.name" type="text" placeholder="例: 黑龍特級黑豆蔭油" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none focus:border-amber-400 text-xs">
+          </div>
+
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">語音/搜尋別名 (逗號分隔)</label>
+            <input v-model="itemForm.aliases" type="text" placeholder="例: 醬油,蔭油,黑豆油" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none focus:border-amber-400 text-xs">
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">物資分類</label>
+              <select v-model="itemForm.category" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none text-xs">
+                <option v-for="c in availableCategories" :key="c" :value="c">{{ c }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">計量單位</label>
+              <input v-model="itemForm.unit" type="text" placeholder="例: 瓶, 包, 罐, 捲" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none text-xs">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">初始庫存量</label>
+              <input v-model.number="itemForm.current_qty" type="number" min="0" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none text-xs">
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">安全警示存量</label>
+              <input v-model.number="itemForm.min_qty" type="number" min="0" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none text-xs">
+            </div>
+          </div>
+
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">初始購買單價 (選填)</label>
+              <input v-model.number="itemForm.last_price" type="number" placeholder="金額" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none text-xs">
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">購買通路 (選填)</label>
+              <input v-model="itemForm.last_store" type="text" placeholder="例: 全聯" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none text-xs">
+            </div>
+          </div>
+        </div>
+
+        <div class="pt-2">
+          <button @click="submitAddItem" :disabled="submitting || !itemForm.name" class="w-full bg-slate-900 active:bg-black text-white font-bold py-3 rounded-xl shadow-sm text-xs disabled:opacity-50 transition">
+            <span v-if="submitting">新增中...</span>
+            <span v-else>確認建立品項</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. 編輯品項彈窗 (Edit Modal) -->
+    <div v-if="showEditModal" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm">
+      <div class="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+        <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+          <h3 class="text-base font-bold text-slate-900">編輯物資資料</h3>
+          <button @click="showEditModal = false" class="text-slate-400 hover:text-slate-600 p-1">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          </button>
+        </div>
+
+        <div class="space-y-3 text-xs">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">品項名稱</label>
+            <input v-model="editForm.name" type="text" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none text-xs">
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">別名庫 (逗號分隔)</label>
+            <input v-model="editForm.aliases" type="text" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none text-xs">
+          </div>
+          <div class="grid grid-cols-2 gap-2">
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">分類</label>
+              <select v-model="editForm.category" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none text-xs">
+                <option v-for="c in availableCategories" :key="c" :value="c">{{ c }}</option>
+              </select>
+            </div>
+            <div>
+              <label class="block font-bold text-slate-700 mb-1">單位</label>
+              <input v-model="editForm.unit" type="text" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none text-xs">
+            </div>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">安全警示存量</label>
+            <input v-model.number="editForm.min_qty" type="number" min="0" class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none text-xs">
+          </div>
+        </div>
+
+        <div class="pt-2 flex items-center space-x-2">
+          <button @click="confirmDeleteItem" class="px-3 py-3 border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl text-xs font-bold transition">
+            刪除品項
+          </button>
+          <button @click="submitEditItem" :disabled="submitting" class="flex-1 bg-slate-900 active:bg-black text-white font-bold py-3 rounded-xl shadow-sm text-xs transition">
+            儲存變更
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. 歷史異動紀錄彈窗 (Logs Drawer) -->
+    <div v-if="showLogsModal" class="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm">
+      <div class="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl p-5 space-y-4 max-h-[85vh] flex flex-col">
+        <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+          <div>
+            <h3 class="text-base font-bold text-slate-900">異動歷史日誌</h3>
+            <p class="text-[11px] text-slate-400">最新 30 筆操作記錄</p>
+          </div>
+          <button @click="showLogsModal = false" class="text-slate-400 hover:text-slate-600 p-1">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          </button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto space-y-2.5 pr-1">
+          <div v-for="log in logs" :key="log.log_id" class="bg-slate-50 border border-slate-100 rounded-xl p-2.5 text-xs space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="font-bold text-slate-800">{{ log.item_name || log.item_id }}</span>
+              <span :class="log.action === 'RESTOCK' ? 'text-emerald-600 bg-emerald-50' : 'text-slate-600 bg-slate-200'" class="px-1.5 py-0.5 rounded text-[10px] font-bold">
+                {{ log.action === 'RESTOCK' ? '+ 補貨' : '- 消耗' }} {{ log.change_qty }}
+              </span>
+            </div>
+            <div class="flex items-center justify-between text-[11px] text-slate-400">
+              <span>{{ formatDateTime(log.timestamp) }}</span>
+              <span>結存: {{ log.balance_qty }}</span>
+            </div>
+            <div v-if="log.unit_price || log.store || log.note" class="text-[11px] text-slate-500 pt-0.5 border-t border-slate-100/80">
+              <span v-if="log.unit_price">${{ log.unit_price }} </span>
+              <span v-if="log.store">({{ log.store }}) </span>
+              <span v-if="log.note" class="text-slate-400">{{ log.note }}</span>
+            </div>
+          </div>
+          <div v-if="logs.length === 0" class="text-center py-8 text-slate-400 text-xs">
+            目前尚無異動紀錄
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. 設定彈窗 (Settings Modal) -->
+    <div v-if="showSettingsModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+      <div class="bg-white w-full max-w-sm rounded-2xl p-5 space-y-4 shadow-2xl">
+        <div class="flex items-center justify-between pb-2 border-b border-slate-100">
+          <h3 class="text-sm font-bold text-slate-900">後端連線設定</h3>
+          <button @click="showSettingsModal = false" class="text-slate-400 hover:text-slate-600 p-1">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+          </button>
+        </div>
+
+        <div class="space-y-3 text-xs">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Google Apps Script (GAS) 網址</label>
+            <input v-model="tempGasUrl" type="url" placeholder="https://script.google.com/macros/s/.../exec"
+                   class="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 outline-none focus:border-amber-400 text-xs font-mono">
+            <p class="text-[11px] text-slate-400 mt-1 leading-relaxed">
+              請在此貼上您的 Google 試算表部署生成的 Web App 網址。網址將儲存於您的手機本地瀏覽器。
+            </p>
+          </div>
+        </div>
+
+        <div class="pt-2 flex items-center space-x-2">
+          <button @click="saveGasUrl" class="w-full bg-slate-900 text-white font-bold py-2.5 rounded-xl shadow-sm text-xs transition">
+            儲存並連接
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 全局 Toast 提示 -->
+    <div v-if="toast.show" 
+         class="fixed bottom-20 left-1/2 -translate-x-1/2 z-50 bg-slate-900/90 backdrop-blur text-white text-xs px-4 py-2.5 rounded-2xl shadow-xl flex items-center space-x-3 transition-all duration-300">
+      <span>{{ toast.message }}</span>
+      <button v-if="toast.undoAction" @click="executeUndo" class="text-amber-400 font-bold underline text-xs">
+        復原
+      </button>
+    </div>
+
+  </div>
+
+  <script>
+    const { createApp, ref, computed, onMounted } = Vue;
+
+    createApp({
+      setup() {
+        const DEFAULT_GAS_URL = 'https://script.google.com/macros/s/AKfycbxCd5YJ6n7lrpeGtAe8Z8RQfa_HzymYyYKhsJPzkyZRMgbBXZOoq7mJNA76inZP9tlaGA/exec';
+        const gasUrl = ref(localStorage.getItem('HOME_PANTRY_GAS_URL') || DEFAULT_GAS_URL);
+        const tempGasUrl = ref(gasUrl.value);
+        const inventory = ref([]);
+        const logs = ref([]);
+        const loading = ref(false);
+        const submitting = ref(false);
+
+        // UI 狀態
+        const showSettingsModal = ref(false);
+        const showRestockModal = ref(false);
+        const showAddModal = ref(false);
+        const showEditModal = ref(false);
+        const showLogsModal = ref(false);
+
+        // 搜尋與篩選
+        const searchQuery = ref('');
+        const selectedCategory = ref('全部');
+        const availableCategories = ['主食', '調味品', '食用油', '乾貨', '生活耗材', '其他'];
+        const categories = computed(() => ['全部', ...availableCategories]);
+        const storeQuickList = ['全聯', '家樂福', '好市多', '蝦皮', '傳統市場', '大潤發'];
+
+        // 表單與活動物資
+        const activeItem = ref(null);
+        const restockForm = ref({ qty: 1, price: null, store: '', note: '' });
+        const itemForm = ref({
+          name: '', aliases: '', category: '調味品', unit: '瓶',
+          current_qty: 1, min_qty: 1, last_price: null, last_store: ''
+        });
+        const editForm = ref({});
+
+        // Toast 與復原
+        const toast = ref({ show: false, message: '', undoAction: null });
+        let toastTimer = null;
+        let lastUndoData = null;
+
+        function showToast(msg, undoCallback = null) {
+          toast.value = { show: true, message: msg, undoAction: undoCallback };
+          clearTimeout(toastTimer);
+          toastTimer = setTimeout(() => { toast.value.show = false; }, 3500);
+        }
+
+        function executeUndo() {
+          if (toast.value.undoAction) {
+            toast.value.undoAction();
+            toast.value.show = false;
+          }
+        }
+
+        // 日期格式化小工具
+        function formatDate(val) {
+          if (!val) return '';
+          return String(val).split('T')[0];
+        }
+
+        function formatDateTime(val) {
+          if (!val) return '';
+          if (typeof val === 'string' && val.includes('T')) {
+            const parts = val.split('T');
+            const time = parts[1].replace('.000Z', '').slice(0, 5);
+            return `${parts[0]} ${time}`;
+          }
+          return String(val);
+        }
+
+        // 讀取資料
+        async function fetchData(showFeedback = false) {
+          if (!gasUrl.value) return;
+          loading.value = true;
+          try {
+            const res = await fetch(`${gasUrl.value}?action=getAll`, { redirect: 'follow' });
+            const data = await res.json();
+            if (data.status === 'success') {
+              inventory.value = data.inventory || [];
+              logs.value = data.logs || [];
+              if (showFeedback) showToast('✅ 庫存資料已最新');
+            } else {
+              showToast('讀取失敗: ' + (data.message || '未知錯誤'));
+            }
+          } catch (err) {
+            showToast('連線失敗，請檢查網路或 GAS 網址');
+          } finally {
+            loading.value = false;
+          }
+        }
+
+        // 保存 GAS 網址
+        function saveGasUrl() {
+          let url = tempGasUrl.value.trim();
+          if (!url) return;
+          localStorage.setItem('HOME_PANTRY_GAS_URL', url);
+          gasUrl.value = url;
+          showSettingsModal.value = false;
+          fetchData(true);
+        }
+
+        // 篩選與排序庫存
+        const filteredInventory = computed(() => {
+          let list = [...inventory.value];
+
+          if (selectedCategory.value !== '全部') {
+            list = list.filter(i => i.category === selectedCategory.value);
+          }
+
+          if (searchQuery.value.trim()) {
+            const q = searchQuery.value.trim().toLowerCase();
+            list = list.filter(i => 
+              (i.name && i.name.toLowerCase().includes(q)) ||
+              (i.aliases && i.aliases.toLowerCase().includes(q)) ||
+              (i.category && i.category.toLowerCase().includes(q))
+            );
+          }
+
+          // 排序：低於安全庫存的優先排前，其餘按名稱
+          return list.sort((a, b) => {
+            const aLow = Number(a.current_qty) <= Number(a.min_qty);
+            const bLow = Number(b.current_qty) <= Number(b.min_qty);
+            if (aLow && !bLow) return -1;
+            if (!aLow && bLow) return 1;
+            return 0;
+          });
+        });
+
+        // 警示品項清單
+        const lowStockItems = computed(() => {
+          return inventory.value.filter(i => Number(i.current_qty) <= Number(i.min_qty));
+        });
+
+        // 快捷消耗 (-1 樂觀更新)
+        async function quickConsume(item) {
+          if (item.current_qty <= 0) return;
+
+          const oldQty = item.current_qty;
+          item.current_qty = Math.max(0, item.current_qty - 1); // 樂觀更新
+
+          showToast(`已消耗 1 ${item.unit}【${item.name}】(剩餘 ${item.current_qty})`, () => {
+            // 復原邏輯
+            item.current_qty = oldQty;
+            sendPost('restock', { itemId: item.item_id, qty: 1, note: '復原操作' });
+          });
+
+          try {
+            await sendPost('consume', { itemId: item.item_id, qty: 1, note: '前端快捷扣減' });
+          } catch (err) {
+            item.current_qty = oldQty; // 失敗回滾
+            showToast('❌ 扣減失敗，已還原');
+          }
+        }
+
+        // 打開補貨視窗
+        function openRestockModal(item) {
+          activeItem.value = item;
+          restockForm.value = {
+            qty: 1,
+            price: item.last_price || null,
+            store: item.last_store || '',
+            note: ''
+          };
+          showRestockModal.value = true;
+        }
+
+        // 提交補貨
+        async function submitRestock() {
+          if (!activeItem.value) return;
+          submitting.value = true;
+          try {
+            const res = await sendPost('restock', {
+              itemId: activeItem.value.item_id,
+              qty: restockForm.value.qty,
+              price: restockForm.value.price,
+              store: restockForm.value.store,
+              note: restockForm.value.note
+            });
+            showToast(`🎉 成功補貨 ${activeItem.value.name} +${restockForm.value.qty}`);
+            showRestockModal.value = false;
+            fetchData();
+          } catch (err) {
+            showToast('補貨記錄失敗: ' + err.message);
+          } finally {
+            submitting.value = false;
+          }
+        }
+
+        // 打開新增品項視窗
+        function openAddModal() {
+          itemForm.value = {
+            name: '', aliases: '', category: '調味品', unit: '瓶',
+            current_qty: 1, min_qty: 1, last_price: null, last_store: ''
+          };
+          showAddModal.value = true;
+        }
+
+        // 提交新增品項
+        async function submitAddItem() {
+          if (!itemForm.value.name) return;
+          submitting.value = true;
+          try {
+            await sendPost('addItem', { item: itemForm.value });
+            showToast('✅ 成功新增品項');
+            showAddModal.value = false;
+            fetchData();
+          } catch (err) {
+            showToast('新增失敗: ' + err.message);
+          } finally {
+            submitting.value = false;
+          }
+        }
+
+        // 打開編輯視窗
+        function openEditModal(item) {
+          editForm.value = { ...item };
+          showEditModal.value = true;
+        }
+
+        // 提交編輯
+        async function submitEditItem() {
+          submitting.value = true;
+          try {
+            await sendPost('editItem', { item: editForm.value });
+            showToast('✅ 品項資料已更新');
+            showEditModal.value = false;
+            fetchData();
+          } catch (err) {
+            showToast('更新失敗: ' + err.message);
+          } finally {
+            submitting.value = false;
+          }
+        }
+
+        // 刪除品項
+        async function confirmDeleteItem() {
+          if (!confirm(`確定要刪除【${editForm.value.name}】嗎？`)) return;
+          submitting.value = true;
+          try {
+            await sendPost('deleteItem', { itemId: editForm.value.item_id });
+            showToast('已刪除品項');
+            showEditModal.value = false;
+            fetchData();
+          } catch (err) {
+            showToast('刪除失敗: ' + err.message);
+          } finally {
+            submitting.value = false;
+          }
+        }
+
+        // 底層發送 POST (使用 text/plain 避免 CORS preflight 錯誤)
+        async function sendPost(action, payload) {
+          const body = JSON.stringify({ action: action, ...payload });
+          const res = await fetch(gasUrl.value, {
+            method: 'POST',
+            redirect: 'follow',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: body
+          });
+          return await res.json();
+        }
+
+        // 初始化 LIFF (若有的話)
+        onMounted(() => {
+          if (window.liff) {
+            liff.init({ liffId: "" }).catch(() => {
+              // 獨立瀏覽器開啟時忽略 LIFF 初始化失敗
+            });
+          }
+          if (gasUrl.value) {
+            fetchData();
+          }
+        });
+
+        return {
+          gasUrl, tempGasUrl, inventory, logs, loading, submitting,
+          showSettingsModal, showRestockModal, showAddModal, showEditModal, showLogsModal,
+          searchQuery, selectedCategory, categories, availableCategories, storeQuickList,
+          activeItem, restockForm, itemForm, editForm, toast,
+          filteredInventory, lowStockItems, formatDate, formatDateTime,
+          fetchData, saveGasUrl, quickConsume, executeUndo,
+          openRestockModal, submitRestock, openAddModal, submitAddItem,
+          openEditModal, submitEditItem, confirmDeleteItem
+        };
+      }
+    }).mount('#app');
+  </script>
+</body>
+</html>
